@@ -32,9 +32,3 @@ class game_field:
     def game_is_lost(self):
         return self.health == 0
 
-    def __str__(self):
-        s = ''
-        for i in range(self._width):
-            s += ' '.join(map(str, map(int, self.game_map[i]))) + '\n'
-        return s
-

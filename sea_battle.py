@@ -1,17 +1,26 @@
-from drawer import drawer
+import drawer
 from field import game_field
 import curses
 import argparse
 import pickle
+import os
+import dataclasses
+from keys import Keys
+
+
+@dataclasses
+class Cursor:
+    x: int
+    y: int
 
 
 def get_bot_shot_sequence(borders):
-    s = set()
+    positions = set()
     for i in range(borders[0]):
         for j in range(borders[1]):
-            s.add((i, j))
-    while len(s) != 0:
-        yield s.pop()
+            positions.add((i, j))
+    while len(positions) != 0:
+        yield positions.pop()
 
 
 def save_game(fields):
@@ -20,6 +29,8 @@ def save_game(fields):
 
 
 def load_game(file):
+    if not os.path.exists(file):
+        return None
     with open(file, 'rb') as save:
         return pickle.load(save)
 
@@ -27,39 +38,43 @@ def load_game(file):
 def start_game(scr, size, save_file):
     drawer.window_set(size)
 
-    if save_file == '':
+    field = None
+    if not save_file == '':
+        field = load_game(save_file)
+        if field is not None:
+            player_field = game_field(field=field[0])
+            bot_field = game_field(field=field[1])
+    elif save_file == '' or field is None:
         player_field = game_field(*size)
         bot_field = game_field(*size)
-    else:
-        fields = load_game(save_file)
-        player_field = game_field(field=fields[0])
-        bot_field = game_field(field=fields[1])
 
-    cursor = [0, 0]
+    cursor = Cursor(x=0, y=0)
     drawer.draw_game(scr, (player_field, bot_field), cursor)
     bot_choises = get_bot_shot_sequence(size)
 
     while True:
         key = scr.getch()
         drawer.clear_screen(scr)
-        if key == curses.KEY_UP and cursor[0] > 0:
-            cursor[0] -= 1
-        elif key == curses.KEY_DOWN and cursor[0] < size[0] - 1:
-            cursor[0] += 1
-        elif key == curses.KEY_RIGHT and cursor[1] < size[1] - 1:
-            cursor[1] += 1
-        elif key == curses.KEY_LEFT and cursor[1] > 0:
-            cursor[1] -= 1
+        if key == curses.KEY_UP and cursor.x > 0:
+            cursor.x -= 1
+        elif key == curses.KEY_DOWN and cursor.x < field.width - 1:
+            cursor.x += 1
+        elif key == curses.KEY_RIGHT and cursor.y < field.height - 1:
+            cursor.y += 1
+        elif key == curses.KEY_LEFT and cursor.y > 0:
+            cursor.y -= 1
         elif key == curses.KEY_F5:
-            save_game([player_field.game_map, bot_field.game_map])
-        elif key == curses.KEY_ENTER or key in [10, 13]:
-            bot_field.shoot(*cursor)
+            save_game((player_field.game_map, bot_field.game_map))
+        elif key == curses.KEY_ENTER or key in [Keys.ENTER1, Keys.ESC_KEY2]:
+            bot_field.shoot(cursor.x, cursor.y)
             player_field.shoot(*next(bot_choises))
-        elif key in [27, 113]:
+        elif key == Keys.ESC_KEY1 or key == Keys.ESC_KEY2:
             break
         drawer.draw_game(scr, (player_field, bot_field), cursor)
-        if bot_field.game_is_lost() or player_field.game_is_lost():
-            if bot_field.game_is_lost():
+        player_won = bot_field.game_is_lost()
+        bot_won = player_field.game_is_lost()
+        if bot_won or player_won:
+            if player_won:
                 s = 'You won'
             else:
                 s = 'You lost'
